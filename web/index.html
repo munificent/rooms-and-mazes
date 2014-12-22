@@ -1,0 +1,72 @@
+<html>
+<head>
+  <title>Rooms and Mazes Dungeon Generator Demo</title>
+  <style>
+    body {
+      background: #fff;
+      color: #222;
+      text-align: center;
+      font: 16px Georgia, serif;
+      width: 600px;
+    }
+
+    canvas {
+      display: inline-block;
+      outline: none;
+    }
+
+    label {
+      display: inline-block;
+      width: 200px;
+    }
+
+    input[type=range] {
+      width: 200px;
+    }
+
+    output {
+      display: inline-block;
+      width: 100px;
+    }
+  </style>
+</head>
+<body>
+<script type="application/dart" src="main.dart"></script>
+<script src="packages/browser/dart.js"></script>
+<h2>Whole Enchilada</h2>
+<canvas id="enchilada" width="570" height="390">
+    Sorry, you need canvas support for this demo.
+</canvas>
+
+<h2>Rooms</h2>
+<canvas id="rooms" width="570" height="390">
+    Sorry, you need canvas support for this demo.
+</canvas>
+<label for="attempts">Attempts:</label>
+<input type="range" id="attempts" min="10" value="200" max="1000">
+<output for="attempts" id="attempts-output">200</output>
+
+<h2>Dead Ends</h2>
+<canvas id="dead-ends" width="570" height="390">
+    Sorry, you need canvas support for this demo.
+</canvas>
+<label for="dead-end-open">Corridors to leave:</label>
+<input type="range" id="dead-end-open" min="1" value="1000" max="3000">
+<output for="dead-end-open" id="dead-end-open-output">1000</output>
+
+<h2>Maze Fill</h2>
+<canvas id="maze-fill" width="570" height="390">
+    Sorry, you need canvas support for this demo.
+</canvas>
+
+<h2>Connectors</h2>
+<canvas id="connectors" width="570" height="390">
+    Sorry, you need canvas support for this demo.
+</canvas>
+
+<h2>Giant</h2>
+<canvas id="giant" width="570" height="390">
+    Sorry, you need canvas support for this demo.
+</canvas>
+</body>
+</html>

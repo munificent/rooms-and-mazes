@@ -1,0 +1,4 @@
+name: rooms_and_mazes
+dependencies:
+  browser: any
+  piecemeal: any
