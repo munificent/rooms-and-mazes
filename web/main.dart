@@ -22,7 +22,7 @@ const WIGGLE_PERCENT = 50;
 html.ImageElement _tileset;
 
 main() {
-  _tileset = new html.ImageElement(src: "tiles.png");
+  _tileset = new html.ImageElement(src: "/image/2014/12/tiles.png");
   _tileset.onLoad.listen(_start);
 }
 
@@ -37,10 +37,6 @@ _start(_) {
 
   new MazeFillDungeon();
   new ConnectorsDungeon();
-
-  var connections = new ConnectionsDungeon();
-  slider(connections, "connection-percent",
-      (value) => connections.extraConnectionChance = value);
 
   new Dungeon("giant",
       cellSize: 2, speed: 8, roomTries: 600, maxRoomSize: 8);
@@ -74,7 +70,7 @@ class DeadEndsDungeon extends Dungeon {
   bool get showRegions => false;
   int leaveOpen = 1000;
 
-  DeadEndsDungeon() : super("dead-ends") {
+  DeadEndsDungeon() : super("dead-ends", speed: 4) {
     showRegions = false;
     roomTries = 0;
   }
@@ -196,8 +192,8 @@ class Dungeon {
     _canvas = html.querySelector("#$id") as html.CanvasElement;
     _context = _canvas.context2D;
 
-    var width = _canvas.width;
-    var height = _canvas.height;
+    var width = 570;
+    var height = 390;
 
     _dungeonWidth = width ~/ cellSize;
     _dungeonHeight = height ~/ cellSize;
@@ -206,8 +202,6 @@ class Dungeon {
     _scale = html.window.devicePixelRatio;
     _canvas.width = (width * _scale).toInt();
     _canvas.height = (height * _scale).toInt();
-    _canvas.style.width = '${width}px';
-    _canvas.style.height = '${height}px';
 
     _floors = new Array2D<int>(_dungeonWidth, _dungeonHeight);
 
