@@ -1,5 +1,1 @@
-packages
-build/
-
-# Intellij stuff.
-.idea
+.dart_tool
