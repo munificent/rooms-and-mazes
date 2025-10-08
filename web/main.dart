@@ -238,8 +238,6 @@ class Dungeon {
     _mergeCells.clear();
     _openCells.clear();
 
-    _context.fillStyle = 'red'.toJS;
-    _context.fillRect(0, 0, _canvas.width, _canvas.height);
     for (var pos in _cells.bounds) {
       _carve(pos, type: CellType.solid, region: Cell._noRegion);
     }
@@ -387,7 +385,7 @@ class Dungeon {
       _connectors.add(pos);
     }
 
-    _connectors.shuffle();
+    rng.shuffle(_connectors);
 
     // Start the merge by turning one room into the merge color.
     _startMerge();
@@ -415,20 +413,19 @@ class Dungeon {
 
     // Remove any connectors that aren't needed anymore.
     _connectors.removeWhere((pos) {
-      // Don't allow connectors right next to each other.
+      // Don't allow multiple doors right next to each other.
       if (connector! - pos < 2) return true;
 
       // If the connector no long spans different regions, we don't need it.
       var regions = _regionsTouching(
         pos,
       ).where((region) => !merged!.contains(region));
-      if (regions.isNotEmpty) return false;
 
       // This connecter isn't needed, but connect it occasionally so that the
       // dungeon isn't singly-connected.
-      if (rng.oneIn(50)) _carve(pos, type: CellType.door);
+      var addLoop = rng.oneIn(50);
 
-      return true;
+      return regions.isEmpty && !addLoop;
     });
 
     // Start the merge floodfill.
@@ -467,7 +464,7 @@ class Dungeon {
       if (!_cells[pos].isSolid) _openCells.add(pos);
     }
 
-    _openCells.shuffle();
+    rng.shuffle(_openCells);
     _deadEndSeek = 0;
   }
 
