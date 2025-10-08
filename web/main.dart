@@ -4,13 +4,21 @@ import 'dart:js_interop';
 import 'package:piecemeal/piecemeal.dart';
 import 'package:web/web.dart' as web;
 
-const _tileSize = 12;
+const _tileSize = 32;
 
 enum Tile { floor, solid, wall, hDoor, vDoor }
 
-const _cellSolid = 0;
-const _cellMerged = -1;
-const _cellDoor = -2;
+enum CellType { open, solid, door }
+
+class Cell {
+  static const _noRegion = -1;
+
+  CellType type = CellType.solid;
+  int region = _noRegion;
+
+  bool get isSolid => type == CellType.solid;
+  bool get hasRegion => region != _noRegion;
+}
 
 const _wigglePercent = 50;
 
@@ -24,30 +32,18 @@ _start(_) {
   Dungeon("enchilada");
 
   var rooms = RoomsDungeon();
-  slider(rooms, "attempts", (value) => rooms.roomTries = value);
+  rooms.slider("attempts", (value) => rooms.roomTries = value);
 
   var deadEnds = DeadEndsDungeon();
-  slider(deadEnds, "dead-end-open", (value) => deadEnds.leaveOpen = value);
+  deadEnds.slider("dead-end-open", (value) => deadEnds.leaveOpen = value);
 
   MazeFillDungeon();
   ConnectorsDungeon();
 
-  Dungeon("giant", cellSize: 2, speed: 8, roomTries: 600, maxRoomSize: 8);
+  Dungeon("giant", cellSize: 4, speed: 8, roomTries: 600, maxRoomSize: 8);
 }
 
-T _query<T>(String selector) => web.document.querySelector(selector) as T;
-
-void slider(Dungeon dungeon, String id, Function(int value) effect) {
-  var element = _query<web.HTMLInputElement>("#$id");
-  var output = _query<web.HTMLOutputElement>("#$id-output");
-
-  element.onChange.listen((_) {
-    effect(int.parse(element.value));
-    output.value = element.value;
-    dungeon.reset();
-    dungeon.start();
-  });
-}
+T query<T>(String selector) => web.document.querySelector(selector) as T;
 
 class RoomsDungeon extends Dungeon {
   RoomsDungeon() : super("rooms") {
@@ -114,7 +110,7 @@ class ConnectorsDungeon extends Dungeon {
       }
       _findOpenCells();
 
-      _tiles = _floors.bounds.inflate(-1).iterator;
+      _tiles = _cells.bounds.inflate(-1).iterator;
       return true;
     }
 
@@ -129,9 +125,9 @@ class ConnectorsDungeon extends Dungeon {
       var pos = _tiles!.current;
 
       // Can't already be part of a region.
-      if (_floors[pos] > _cellSolid) continue;
+      if (_cells[pos].hasRegion) continue;
 
-      var regions = _getRegionsTouching(pos);
+      var regions = _regionsTouching(pos);
       if (regions.length < 2) continue;
 
       _drawConnector(pos);
@@ -157,7 +153,7 @@ class Dungeon {
 
   bool _running = false;
 
-  final Array2D<int> _floors;
+  final Array2D<Cell> _cells;
 
   final _rooms = <Rect>[];
   int _roomTriesLeft = 0;
@@ -186,15 +182,15 @@ class Dungeon {
 
   Dungeon(
     String id, {
-    this.cellSize = 6,
+    this.cellSize = 16,
     this.speed = 2,
     this.roomTries = 200,
     this.maxRoomSize = 5,
-  }) : _canvas = _query<web.HTMLCanvasElement>("#$id"),
-       _floors = Array2D<int>(
+  }) : _canvas = query<web.HTMLCanvasElement>("#$id"),
+       _cells = Array2D.generated(
          _canvasWidth ~/ cellSize,
          _canvasHeight ~/ cellSize,
-         _cellSolid,
+         (_) => Cell(),
        ) {
     // Handle high-resolution (i.e. retina) displays.
     _scale = web.window.devicePixelRatio;
@@ -242,8 +238,10 @@ class Dungeon {
     _mergeCells.clear();
     _openCells.clear();
 
-    for (var pos in _floors.bounds) {
-      _carve(pos, _cellSolid);
+    _context.fillStyle = 'red'.toJS;
+    _context.fillRect(0, 0, _canvas.width, _canvas.height);
+    for (var pos in _cells.bounds) {
+      _carve(pos, type: CellType.solid, region: Cell._noRegion);
     }
   }
 
@@ -256,6 +254,18 @@ class Dungeon {
         _removeDeadEnd();
   }
 
+  void slider(String id, Function(int value) effect) {
+    var element = query<web.HTMLInputElement>("#$id");
+    var output = query<web.HTMLOutputElement>("#$id-output");
+
+    element.onChange.listen((_) {
+      effect(int.parse(element.value));
+      output.value = element.value;
+      reset();
+      start();
+    });
+  }
+
   bool _addRoom({bool fast = false}) {
     if (_roomTriesLeft <= 0) return false;
 
@@ -263,8 +273,8 @@ class Dungeon {
       var width = rng.range(2, maxRoomSize) * 2 + 1;
       var height = rng.range(2, maxRoomSize) * 2 + 1;
 
-      var x = rng.range(0, (_floors.width - width) ~/ 2) * 2 + 1;
-      var y = rng.range(0, (_floors.height - height) ~/ 2) * 2 + 1;
+      var x = rng.range(0, (_cells.width - width) ~/ 2) * 2 + 1;
+      var y = rng.range(0, (_cells.height - height) ~/ 2) * 2 + 1;
 
       var room = Rect(x, y, width, height);
 
@@ -289,17 +299,17 @@ class Dungeon {
   }
 
   bool _startMaze() {
-    if (_mazeStartY >= _floors.height - 1) return false;
+    if (_mazeStartY >= _cells.height - 1) return false;
 
     // Find the next solid place to start a maze.
-    while (_floors.get(_mazeStartX, _mazeStartY) != _cellSolid) {
+    while (!_cells.get(_mazeStartX, _mazeStartY).isSolid) {
       _mazeStartX += 2;
-      if (_mazeStartX >= _floors.width - 1) {
+      if (_mazeStartX >= _cells.width - 1) {
         _mazeStartX = 1;
         _mazeStartY += 2;
 
         // Stop if we've scanned the whole dungeon.
-        if (_mazeStartY >= _floors.height - 1) {
+        if (_mazeStartY >= _cells.height - 1) {
           _findConnectors();
           return false;
         }
@@ -330,10 +340,10 @@ class Dungeon {
 
       for (var dir in Direction.cardinal) {
         // Must end in bounds.
-        if (!_floors.bounds.contains(cell + dir * 3)) continue;
+        if (!_cells.bounds.contains(cell + dir * 3)) continue;
 
         // Destination must not be open.
-        if (_floors[cell + dir * 2] != _cellSolid) continue;
+        if (!_cells[cell + dir * 2].isSolid) continue;
 
         openDirs.add(dir);
       }
@@ -355,9 +365,9 @@ class Dungeon {
       _lastMazeDir = dir;
 
       _carve(cell + dir);
-      _carve(cell + dir * 2);
+      _carve(cell + dir + dir);
 
-      _mazeCells.add(cell + dir * 2);
+      _mazeCells.add(cell + dir + dir);
 
       // Made progress, so refresh.
       if (!fast) return true;
@@ -367,11 +377,11 @@ class Dungeon {
   }
 
   void _findConnectors() {
-    for (var pos in _floors.bounds.inflate(-1)) {
+    for (var pos in _cells.bounds.inflate(-1)) {
       // Can't already be part of a region.
-      if (_floors[pos] > _cellSolid) continue;
+      if (_cells[pos].hasRegion) continue;
 
-      var regions = _getRegionsTouching(pos);
+      var regions = _regionsTouching(pos);
       if (regions.length < 2) continue;
 
       _connectors.add(pos);
@@ -385,7 +395,7 @@ class Dungeon {
 
   void _startMerge() {
     _mergeCells.add(_rooms.first.center);
-    _carve(_rooms.first.center, _cellMerged);
+    _carve(_rooms.first.center, region: Cell._noRegion);
   }
 
   bool _mergeRegion() {
@@ -395,8 +405,8 @@ class Dungeon {
     Vec? connector;
     Set<int>? merged;
     for (var i = 0; i < _connectors.length; i++) {
-      merged = _getRegionsTouching(_connectors[i]);
-      if (merged.contains(_cellMerged)) {
+      merged = _regionsTouching(_connectors[i]);
+      if (merged.contains(Cell._noRegion)) {
         connector = _connectors[i];
         _connectors.removeAt(i);
         break;
@@ -409,21 +419,21 @@ class Dungeon {
       if (connector! - pos < 2) return true;
 
       // If the connector no long spans different regions, we don't need it.
-      var regions = _getRegionsTouching(
+      var regions = _regionsTouching(
         pos,
       ).where((region) => !merged!.contains(region));
       if (regions.isNotEmpty) return false;
 
       // This connecter isn't needed, but connect it occasionally so that the
       // dungeon isn't singly-connected.
-      if (rng.oneIn(50)) _carve(pos, _cellDoor);
+      if (rng.oneIn(50)) _carve(pos, type: CellType.door);
 
       return true;
     });
 
     // Start the merge floodfill.
     _mergeCells.add(connector!);
-    _carve(connector, _cellDoor);
+    _carve(connector, type: CellType.door);
     return true;
   }
 
@@ -435,9 +445,9 @@ class Dungeon {
 
       for (var dir in Direction.cardinal) {
         var here = pos + dir;
-        if (_floors[here] <= _cellSolid) continue;
+        if (!_cells[here].hasRegion) continue;
 
-        _carve(here, _cellMerged);
+        _carve(here, region: Cell._noRegion);
         _mergeCells.add(here);
       }
 
@@ -453,8 +463,8 @@ class Dungeon {
   }
 
   void _findOpenCells() {
-    for (var pos in _floors.bounds.inflate(-1)) {
-      if (_floors[pos] != _cellSolid) _openCells.add(pos);
+    for (var pos in _cells.bounds.inflate(-1)) {
+      if (!_cells[pos].isSolid) _openCells.add(pos);
     }
 
     _openCells.shuffle();
@@ -469,14 +479,14 @@ class Dungeon {
     while (true) {
       var pos = _openCells[_deadEndSeek!];
 
-      // If it only has one exit, it's a dead end.
       var exits = 0;
       for (var dir in Direction.cardinal) {
-        if (_floors[pos + dir] != _cellSolid) exits++;
+        if (!_cells[pos + dir].isSolid) exits++;
       }
 
+      // If it only has one exit, it's a dead end.
       if (exits == 1) {
-        _carve(pos, _cellSolid);
+        _carve(pos, type: CellType.solid);
         _openCells.removeAt(_deadEndSeek!);
         if (_deadEndSeek == _openCells.length) _deadEndSeek = 0;
         return true;
@@ -496,74 +506,71 @@ class Dungeon {
     return false;
   }
 
-  Set<int> _getRegionsTouching(Vec pos) {
-    var regions = <int>{};
-    for (var dir in Direction.cardinal) {
-      var region = _floors[pos + dir];
-      if (region != _cellSolid) regions.add(region);
-    }
-
-    return regions;
+  Set<int> _regionsTouching(Vec pos) {
+    return {
+      for (var dir in Direction.cardinal)
+        if (_cells[pos + dir].type == CellType.open) _cells[pos + dir].region,
+    };
   }
 
-  void _carve(Vec pos, [int? value]) {
-    if (value == null) {
-      if (showRegions) {
-        value = _currentRegion;
+  void _carve(Vec pos, {CellType type = CellType.open, int? region}) {
+    if (region == null) {
+      if (type == CellType.open && showRegions) {
+        region = _currentRegion;
       } else {
-        value = _cellMerged;
+        region = Cell._noRegion;
       }
     }
 
-    _floors[pos] = value;
+    _cells[pos].type = type;
+    if (type == CellType.open) _cells[pos].region = region;
 
-    if (value > _cellSolid) {
-      // Open region.
-      _drawTile(pos.x, pos.y, Tile.floor);
+    switch (type) {
+      case CellType.open:
+        _draw(pos.x, pos.y, Tile.floor);
 
-      _context.fillStyle = 'hsla(${value * 17 % 360}, 100%, 20%, 0.5)'.toJS;
-      _context.fillRect(
-        pos.x * cellSize * _scale,
-        pos.y * cellSize * _scale,
-        cellSize * _scale,
-        cellSize * _scale,
-      );
-    } else if (value == _cellSolid) {
-      // Draw the wall.
-      if (pos.y < _floors.height - 1 &&
-          _floors.get(pos.x, pos.y + 1) != _cellSolid) {
-        _drawTile(pos.x, pos.y, Tile.wall);
-      } else {
-        _drawTile(pos.x, pos.y, Tile.solid);
-      }
+        // Make solid above this a wall.
+        if (pos.y > 0 && _cells.get(pos.x, pos.y - 1).isSolid) {
+          _draw(pos.x, pos.y - 1, Tile.wall);
+        }
 
-      // If the tile above this was a wall, it's solid now.
-      if (pos.y > 0 && _floors.get(pos.x, pos.y - 1) == _cellSolid) {
-        _drawTile(pos.x, pos.y - 1, Tile.solid);
-      }
-    } else if (value == _cellDoor) {
-      // Draw the door.
-      if (_floors.get(pos.x - 1, pos.y) == _cellSolid) {
-        _drawTile(pos.x, pos.y, Tile.hDoor);
-      } else {
-        _drawTile(pos.x, pos.y, Tile.vDoor);
-      }
+        // Show the region color.
+        if (region != Cell._noRegion) {
+          _context.fillStyle = 'hsla(${region * 17 % 360}, 80%, 20%, 0.4)'.toJS;
+          _context.fillRect(
+            pos.x * cellSize * _scale,
+            pos.y * cellSize * _scale,
+            cellSize * _scale,
+            cellSize * _scale,
+          );
+        }
+      case CellType.solid:
+        // Draw the wall.
+        if (pos.y < _cells.height - 1 &&
+            !_cells.get(pos.x, pos.y + 1).isSolid) {
+          _draw(pos.x, pos.y, Tile.wall);
+        } else {
+          _draw(pos.x, pos.y, Tile.solid);
+        }
 
-      // Make solid above this a wall.
-      if (pos.y > 0 && _floors.get(pos.x, pos.y - 1) == _cellSolid) {
-        _drawTile(pos.x, pos.y - 1, Tile.wall);
-      }
-    } else {
-      _drawTile(pos.x, pos.y, Tile.floor);
+        // If the tile above this was a wall, it's solid now.
+        if (pos.y > 0 && _cells.get(pos.x, pos.y - 1).isSolid) {
+          _draw(pos.x, pos.y - 1, Tile.solid);
+        }
+      case CellType.door:
+        // Draw the door.
+        if (_cells.get(pos.x - 1, pos.y).isSolid) {
+          _draw(pos.x, pos.y, Tile.hDoor);
+        } else {
+          _draw(pos.x, pos.y, Tile.vDoor);
 
-      // Make solid above this a wall.
-      if (pos.y > 0 && _floors.get(pos.x, pos.y - 1) == _cellSolid) {
-        _drawTile(pos.x, pos.y - 1, Tile.wall);
-      }
+          // Make solid above this a wall.
+          _draw(pos.x, pos.y - 1, Tile.wall);
+        }
     }
   }
 
-  void _drawTile(int x, int y, Tile tile) {
+  void _draw(int x, int y, Tile tile) {
     _context.drawImage(
       _tileset,
       tile.index * _tileSize,
@@ -578,12 +585,12 @@ class Dungeon {
   }
 
   void _drawConnector(Vec pos) {
-    _context.fillStyle = '#ca8'.toJS;
+    _context.fillStyle = '#7dc45e'.toJS;
     _context.fillRect(
-      (pos.x * cellSize + 2) * _scale,
-      (pos.y * cellSize + 2) * _scale,
-      (cellSize - 4) * _scale,
-      (cellSize - 4) * _scale,
+      (pos.x * cellSize + 4) * _scale,
+      (pos.y * cellSize + 4) * _scale,
+      (cellSize - 8) * _scale,
+      (cellSize - 8) * _scale,
     );
   }
 }
