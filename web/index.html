@@ -24,11 +24,6 @@
 
     label {
       display: inline-block;
-      width: 200px;
-    }
-
-    input[type=range] {
-      width: 200px;
     }
 
     output {
@@ -52,7 +47,7 @@
       Sorry, you need canvas support for this demo.
   </canvas>
   <label for="attempts">Attempts:</label>
-  <input type="range" id="attempts" min="1" value="20" max="200">
+  <input type="range" id="attempts" min="1" value="20" max="1000">
   <output for="attempts" id="attempts-output">20</output>
 </figure>
 
@@ -61,9 +56,9 @@
   <canvas id="dead-ends">
       Sorry, you need canvas support for this demo.
   </canvas>
-  <label for="dead-end-open">Corridors to leave:</label>
-  <input type="range" id="dead-end-open" min="1" value="1000" max="3000">
-  <output for="dead-end-open" id="dead-end-open-output">1000</output>
+  <label for="dead-end-remove">Dead ends to remove:</label>
+  <input type="range" id="dead-end-remove" min="1" value="500" max="2400">
+  <output for="dead-end-remove" id="dead-end-remove-output">500</output>
 </figure>
 <h2>Maze Fill</h2>
 <figure>
@@ -84,6 +79,21 @@
   <canvas id="giant">
       Sorry, you need canvas support for this demo.
   </canvas>
+  <label for="giant-rooms">Rooms:</label>
+  <input type="range" id="giant-rooms" min="1" value="1000" max="10000">
+  <output for="giant-rooms" id="giant-rooms-output">1000</output>
+
+  <label for="giant-room-size">Max room size:</label>
+  <input type="range" id="giant-room-size" min="5" value="10" max="40">
+  <output for="giant-room-size" id="giant-room-size-output">10</output>
+
+  <label for="giant-wiggle">Wiggle:</label>
+  <input type="range" id="giant-wiggle" min="0" value="50" max="100">
+  <output for="giant-wiggle" id="giant-wiggle-output">50</output>
+
+  <label for="giant-speed">Speed:</label>
+  <input type="range" id="giant-speed" min="1" value="10" max="100">
+  <output for="giant-speed" id="giant-speed-output">10</output>
 </figure>
 
 </body>
