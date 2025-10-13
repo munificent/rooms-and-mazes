@@ -281,17 +281,22 @@ class Dungeon {
     // Flood fill the starting room.
     yield* _floodFill(_mergeStart, CellType.open);
 
+    rng.shuffle(_connectors);
+
+    var mergedRegions = <int>{};
     while (_connectors.isNotEmpty) {
       // Find a connector that's touching the already-merged cells.
       Vec? connector;
-
-      Set<int>? merged;
-      rng.shuffle(_connectors);
       for (var i = 0; i < _connectors.length; i++) {
-        merged = _regionsTouching(_connectors[i]);
+        var merged = _regionsTouching(_connectors[i]);
         if (merged.contains(Cell.noRegion)) {
           connector = _connectors[i];
           _connectors.removeAt(i);
+
+          // A connector always spans exactly two regions, so the remaining
+          // region is the one being merged.
+          merged.remove(Cell.noRegion);
+          mergedRegions.add(merged.single);
           break;
         }
       }
@@ -301,16 +306,20 @@ class Dungeon {
         // Don't allow multiple doors right next to each other.
         if (connector! - pos < 2) return true;
 
-        // If the connector no long spans different regions, we don't need it.
-        var regions = _regionsTouching(
-          pos,
-        ).where((region) => !merged!.contains(region));
+        for (var region in _regionsTouching(pos)) {
+          // The connector touches a region we haven't merged yet. Keep it.
+          if (region != Cell.noRegion && !mergedRegions.contains(region)) {
+            return false;
+          }
+        }
 
-        // This connecter isn't needed, but connect it occasionally so that the
-        // dungeon isn't singly-connected.
-        var addLoop = rng.oneIn(50);
+        // This connector isn't needed, but connect it occasionally so that
+        // the dungeon isn't singly-connected.
+        if (rng.oneIn(50)) {
+          _carve(pos, type: CellType.door, region: Cell.noRegion);
+        }
 
-        return regions.isEmpty && !addLoop;
+        return true;
       });
 
       // Make a door to the region being merged and flood fill it.
